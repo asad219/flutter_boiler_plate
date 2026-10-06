@@ -68,6 +68,7 @@ replace "android:label=\"$OLD_NAME\"" "android:label=\"$NEW_NAME\"" android/app/
 
 echo "→ iOS bundle id: $OLD_IOS_ID → $NEW_IOS_ID"
 replace "$OLD_IOS_ID" "$NEW_IOS_ID" ios/Runner.xcodeproj/project.pbxproj
+[[ -f codemagic.yaml ]] && replace "$OLD_IOS_ID" "$NEW_IOS_ID" codemagic.yaml
 replace "<string>$OLD_NAME</string>" "<string>$NEW_NAME</string>" ios/Runner/Info.plist
 replace "<string>$OLD_PACKAGE</string>" "<string>$NEW_PACKAGE</string>" ios/Runner/Info.plist
 

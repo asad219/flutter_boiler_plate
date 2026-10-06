@@ -1,0 +1,133 @@
+# Codemagic CI/CD. Setup and troubleshooting: README › CI/CD with Codemagic.
+#
+#   ci               every push and pull request: format check, analyze, test
+#   android-release  tag v*: signed .aab → Google Play (internal track)
+#   ios-release      tag v*: signed .ipa → TestFlight
+#
+# These names must match what you create in Codemagic:
+#   environment groups  app_env, firebase, google_play
+#   Android keystore    upload_keystore
+#   App Store API key   asc_api_key
+
+definitions:
+  flutter: &flutter_version 3.44.5
+  scripts:
+    - &get_packages
+      name: Get packages
+      script: flutter pub get
+    - &write_prod_config
+      name: Write env, Firebase and signing config
+      script: |
+        chmod +x tool/ci/write_config.sh
+        ./tool/ci/write_config.sh prod
+  release_trigger: &release_trigger
+    events:
+      - tag
+    tag_patterns:
+      - pattern: 'v*'
+        include: true
+
+workflows:
+  ci:
+    name: CI (format, analyze, test)
+    instance_type: linux_x2
+    max_build_duration: 30
+    environment:
+      flutter: *flutter_version
+    triggering:
+      events:
+        - push
+        - pull_request
+      branch_patterns:
+        - pattern: '*'
+          include: true
+          source: true
+      cancel_previous_builds: true
+    cache:
+      cache_paths:
+        - $HOME/.pub-cache
+    scripts:
+      - *get_packages
+      - name: Check formatting
+        script: dart format --output=none --set-exit-if-changed lib test
+      - name: Analyze
+        script: flutter analyze
+      - name: Test
+        script: |
+          mkdir -p test-results
+          flutter test --machine > test-results/flutter.json
+        test_report: test-results/flutter.json
+
+  android-release:
+    name: Android release
+    instance_type: linux_x2
+    max_build_duration: 60
+    environment:
+      flutter: *flutter_version
+      java: 17
+      android_signing:
+        - upload_keystore
+      groups:
+        - app_env
+        - firebase
+        - google_play
+    triggering: *release_trigger
+    cache:
+      cache_paths:
+        - $HOME/.pub-cache
+        - $HOME/.gradle/caches
+    scripts:
+      - *write_prod_config
+      - *get_packages
+      - name: Build Android App Bundle
+        script: |
+          flutter build appbundle --release \
+            --build-number=$BUILD_NUMBER \
+            --dart-define-from-file=env/prod.json
+    artifacts:
+      - build/app/outputs/bundle/release/*.aab
+      - build/app/outputs/mapping/release/mapping.txt
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+        submit_as_draft: true
+
+  ios-release:
+    name: iOS release
+    instance_type: mac_mini_m2
+    max_build_duration: 90
+    integrations:
+      app_store_connect: asc_api_key
+    environment:
+      flutter: *flutter_version
+      xcode: latest
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.starter.boilerplate.appBoilerplate
+      groups:
+        - app_env
+        - firebase
+    triggering: *release_trigger
+    cache:
+      cache_paths:
+        - $HOME/.pub-cache
+    scripts:
+      - *write_prod_config
+      - *get_packages
+      - name: Apply signing profiles
+        script: xcode-project use-profiles
+      - name: Build IPA
+        script: |
+          flutter build ipa --release \
+            --build-number=$BUILD_NUMBER \
+            --export-options-plist=/Users/builder/export_options.plist \
+            --dart-define-from-file=env/prod.json
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true

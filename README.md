@@ -24,6 +24,7 @@ Starting a real app? Follow
 - [Firebase setup](#firebase-setup)
 - [Scaffold a new feature](#scaffold-a-new-feature)
 - [Quality](#quality)
+- [CI/CD with Codemagic](#cicd-with-codemagic)
 - [Toolchain notes](#toolchain-notes)
 
 ---
@@ -180,6 +181,7 @@ It updates:
 - the `pubspec.yaml` name and every `package:app_boilerplate/` import in `lib/` and `test/`
 - the Android `namespace` and `applicationId`, moves `MainActivity.kt` to the new package path, and updates `android:label`
 - the iOS `PRODUCT_BUNDLE_IDENTIFIER` (including `RunnerTests`), `CFBundleDisplayName` and `CFBundleName`
+- the iOS `bundle_identifier` in `codemagic.yaml`
 - `AppConstants.appName`
 
 Then it runs `flutter clean && flutter pub get`. Review the result with `git diff`.
@@ -199,7 +201,8 @@ with `git checkout .` first.
    `RunnerTests`), or set it in Xcode → Runner target → *Signing & Capabilities*.
 6. `ios/Runner/Info.plist` → `CFBundleDisplayName` and `CFBundleName`.
 7. `lib/core/constants/app_constants.dart` → `appName`.
-8. `flutter clean && flutter pub get`.
+8. `codemagic.yaml` → `bundle_identifier` under `ios-release`.
+9. `flutter clean && flutter pub get`.
 
 Also update `description` (and `version` if needed) in `pubspec.yaml`, and the
 title and intro of this README.
@@ -299,10 +302,12 @@ env files. The app runs normally with push and analytics disabled.
 
 ### 8. Set up release signing
 
-**Android.** Release builds are currently signed with the debug key
-(`android/app/build.gradle.kts`), and Google Play rejects those.
+**Android.** `android/app/build.gradle.kts` signs release builds with the keystore
+described in `android/key.properties`. Without that file it falls back to the debug
+key, which is fine for `flutter run --release` but rejected by Google Play.
 
-1. Create an upload keystore. Keep it and its passwords outside the repo and back them up:
+1. Create an upload keystore. Keep it and its passwords outside the repo and back them up.
+   Losing it means you can't publish updates (unless Play App Signing resets it):
 
    ```bash
    keytool -genkey -v -keystore ~/keys/my_app-upload.jks \
@@ -318,53 +323,14 @@ env files. The app runs normally with push and analytics disabled.
    storeFile=/Users/<you>/keys/my_app-upload.jks
    ```
 
-3. Add these lines to `.gitignore`:
+   `key.properties`, `*.jks` and `*.keystore` are already git-ignored (`android/.gitignore`).
+   Check which key a release build uses with
+   `cd android && ./gradlew -q :app:signingReport` (look for `Variant: release`).
 
-   ```gitignore
-   android/key.properties
-   *.jks
-   *.keystore
-   ```
+3. For CI, upload the same keystore to Codemagic instead
+   (see [CI/CD with Codemagic](#cicd-with-codemagic)). The build writes `key.properties` for you.
 
-4. In `android/app/build.gradle.kts`, load the properties and use them for `release`.
-   The debug key is kept as a fallback when `key.properties` is missing:
-
-   ```kotlin
-   import java.io.FileInputStream
-   import java.util.Properties
-
-   // ...plugins { } block...
-
-   val keystoreProperties = Properties()
-   val keystorePropertiesFile = rootProject.file("key.properties")
-   if (keystorePropertiesFile.exists()) {
-       keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-   }
-
-   android {
-       // ...existing config...
-
-       signingConfigs {
-           if (keystorePropertiesFile.exists()) {
-               create("release") {
-                   keyAlias = keystoreProperties["keyAlias"] as String
-                   keyPassword = keystoreProperties["keyPassword"] as String
-                   storeFile = file(keystoreProperties["storeFile"] as String)
-                   storePassword = keystoreProperties["storePassword"] as String
-               }
-           }
-       }
-
-       buildTypes {
-           release {
-               signingConfig = signingConfigs.findByName("release")
-                   ?: signingConfigs.getByName("debug")
-           }
-       }
-   }
-   ```
-
-5. Add the release SHA-1 / SHA-256 to your Firebase Android app. If you use Play App
+4. Add the release SHA-1 / SHA-256 to your Firebase Android app. If you use Play App
    Signing, also add the app signing key's fingerprints from Play Console
    (*Setup → App signing*).
 
@@ -379,6 +345,9 @@ uploading.
 flutter build appbundle --release --dart-define-from-file=env/prod.json
 flutter build ipa --release --dart-define-from-file=env/prod.json
 ```
+
+Or let Codemagic build, sign and upload both on every `v*` tag
+(see [CI/CD with Codemagic](#cicd-with-codemagic)).
 
 ### 9. Verify
 
@@ -401,6 +370,7 @@ Final checklist:
 - [ ] Icon, splash, colors and notification icon replaced
 - [ ] Android release keystore set up; app created in App Store Connect
 - [ ] `flutter analyze` and `flutter test` pass
+- [ ] Optional: Codemagic connected, and the `ci` workflow is green
 
 ---
 
@@ -542,9 +512,10 @@ missing. On Android, the Google Services Gradle plugin is applied only once
    - Optional: add your debug/release SHA-1 / SHA-256 fingerprints (`cd android && ./gradlew signingReport`).
 3. **iOS app**
    - Add an iOS app with your bundle id.
-   - Download **`GoogleService-Info.plist`**. In Xcode, open `ios/Runner.xcworkspace`, drag
-     the file into the **Runner** group, and tick *Copy items if needed* + target **Runner**.
-     Copying it into the folder in Finder isn't enough; it must be in the target.
+   - Download **`GoogleService-Info.plist`** → place at **`ios/Runner/GoogleService-Info.plist`**.
+     The Runner target's *Copy GoogleService-Info.plist* build phase bundles it when it
+     exists and skips it otherwise. **Don't** drag it into Xcode: that adds a project
+     reference, and builds then fail on any clone or CI machine without the file.
    - Runner target → *Signing & Capabilities*:
      - **+ Capability → Push Notifications**
      - **+ Capability → Background Modes** → tick *Remote notifications* and *Background fetch*
@@ -747,6 +718,198 @@ flutter analyze        # lints: flutter_lints + stricter rules in analysis_optio
 flutter test           # api_client (interceptors/refresh), api_exception, auth_bloc
 dart format lib test
 ```
+
+CI runs the same checks, with `dart format --output=none --set-exit-if-changed lib test`
+so unformatted code fails the build.
+
+---
+
+## CI/CD with Codemagic
+
+[Codemagic](https://codemagic.io) builds the app from `codemagic.yaml` in the repo root:
+
+| Workflow | Runs on | What it does |
+|---|---|---|
+| `ci` | Every push and pull request (Linux) | Format check, `flutter analyze`, `flutter test` with a test report |
+| `android-release` | Tags matching `v*` (Linux) | Signed `.aab` → Google Play **internal** track (as a draft) |
+| `ios-release` | Tags matching `v*` (Mac mini M2) | Signed `.ipa` → **TestFlight** |
+
+How the release builds get what's git-ignored: `tool/ci/write_config.sh prod` writes
+`env/prod.json`, the Firebase config files and `android/key.properties` from Codemagic
+environment variables. Builds use `--build-number=$BUILD_NUMBER` (Codemagic's per-workflow
+counter); the version name comes from `pubspec.yaml`.
+
+`ci` works as soon as the repo is connected. The release workflows need the one-time
+setup below. Names such as `app_env`, `upload_keystore` and `asc_api_key` must match
+`codemagic.yaml` exactly.
+
+### 1. Connect the repository
+
+1. Sign in at <https://codemagic.io> with GitHub and grant access to the repository.
+2. **Add application** → pick the repo → project type **Flutter App**. Codemagic finds
+   `codemagic.yaml` and creates the webhook, so pushes, pull requests and tags trigger builds.
+3. Push any commit and check that `ci` goes green.
+
+### 2. Environment variable groups
+
+In the app → **Environment variables**, add these variables to the listed groups.
+Tick **Secret** for every value except `API_VERSION` and `ENABLE_FIREBASE`.
+
+| Group | Variable | Value |
+|---|---|---|
+| `app_env` | `BASE_URL` | Production API, e.g. `https://api.acme.com/api/` (**required**) |
+| `app_env` | `API_VERSION` | e.g. `v1` (optional, default `v1`) |
+| `app_env` | `ENABLE_FIREBASE` | `true` or `false` (optional, default `true`) |
+| `firebase` | `GOOGLE_SERVICES_JSON` | `google-services.json`, base64-encoded |
+| `firebase` | `GOOGLE_SERVICE_INFO_PLIST` | `GoogleService-Info.plist`, base64-encoded |
+| `google_play` | `GCLOUD_SERVICE_ACCOUNT_CREDENTIALS` | Google Play service account JSON key, pasted as is (not base64) |
+
+Encode the Firebase files on one line, with no line breaks:
+
+```bash
+base64 -i android/app/google-services.json | pbcopy        # macOS: copies to clipboard
+base64 -i ios/Runner/GoogleService-Info.plist | pbcopy
+base64 -w0 android/app/google-services.json                 # Linux
+```
+
+Skipping Firebase on CI? Leave the `firebase` group empty but keep it (the workflows
+reference it). The builds log a warning and the app runs without Firebase.
+
+### 3. Android: keystore and Google Play
+
+1. **Keystore.** Codemagic → **Teams** → your team → **Code signing identities** →
+   **Android keystores** → upload your upload keystore (`.jks`, see
+   [release signing](#8-set-up-release-signing)) with its passwords and alias. Set the
+   reference name to **`upload_keystore`**.
+2. **Service account.** In [Google Cloud Console](https://console.cloud.google.com),
+   enable the **Google Play Android Developer API**, create a service account, and
+   create a JSON key for it. Put the JSON in `GCLOUD_SERVICE_ACCOUNT_CREDENTIALS`.
+3. **Grant access.** In [Play Console](https://play.google.com/console) → **Users and
+   permissions** → invite the service account's email with release permissions for
+   your app.
+4. **First upload is manual.** Create the app in Play Console and upload the first
+   `.aab` by hand (download it from a Codemagic build's artifacts, or build locally).
+   Google Play's API can't create an app's first release.
+
+### 4. iOS: App Store Connect and signing
+
+1. **App record.** In [App Store Connect](https://appstoreconnect.apple.com) → **Apps** → **+**,
+   create the app with your bundle id.
+2. **API key.** App Store Connect → **Users and Access** → **Integrations** →
+   **App Store Connect API** → generate a key with the **App Manager** role. Download
+   the `.p8` (you can only download it once) and note the **Issuer ID** and **Key ID**.
+3. **Add the key to Codemagic.** **Teams** → your team → **Team integrations** →
+   **Developer Portal** → **Manage keys** → add it with the name **`asc_api_key`**.
+4. **Certificate and profile.** **Code signing identities** → **iOS certificates** →
+   generate (or upload) an **Apple Distribution** certificate. Then **iOS provisioning
+   profiles** → fetch the **App Store** profile for your bundle id.
+5. **Push notifications.** If you use push, enable the **Push Notifications** capability
+   on the App ID in the [Apple Developer portal](https://developer.apple.com/account/resources/identifiers/list)
+   **before** fetching the profile, and add the capability to the Runner target
+   (see [Firebase setup](#firebase-setup)). Re-fetch the profile whenever capabilities change.
+
+The bundle id in `codemagic.yaml` (`ios-release` → `ios_signing` → `bundle_identifier`)
+must match the app. `tool/rename_app.sh` updates it for you.
+
+### 5. Ship a release
+
+```bash
+# bump `version:` in pubspec.yaml (e.g. 1.2.0+1), commit, then:
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+Both release workflows start. Android lands on the internal track as a draft, and iOS
+goes to TestFlight after Apple finishes processing (usually 10–30 minutes). You can
+also start any workflow by hand: **Start new build** → pick the workflow and a branch or tag.
+
+**Staging builds:** copy `android-release` / `ios-release` to new workflows, change
+`write_config.sh prod` to `staging` and `env/prod.json` to `env/staging.json`, and point
+them at a group with the staging `BASE_URL`.
+
+### Troubleshooting
+
+Start with the failing step's log in Codemagic. `write_config.sh` prints `✓` for each
+file it wrote and `!` for each one it skipped.
+
+**Builds don't start**
+
+- *Push or tag does nothing:* check the app → **Webhooks** for recent deliveries.
+  Reconnect the repository if the webhook is missing.
+- *Tag pushed but no release build:* tags aren't pushed by `git push`; use
+  `git push origin v1.2.0`. The tag must start with `v`.
+- *"No workflows found" / YAML errors:* `codemagic.yaml` must sit in the repo root on the
+  branch or tag being built. Validate it in the Codemagic YAML editor.
+
+**`ci` workflow**
+
+- *Check formatting fails:* run `dart format lib test` locally and commit the result.
+- *Passes locally, fails on CI:* compare `flutter --version` with the `flutter:` value in
+  `codemagic.yaml` (`definitions`). Keep them in sync when you upgrade Flutter.
+
+**Configuration**
+
+- *`BASE_URL is not set`:* the `app_env` group is missing, misnamed, or lacks `BASE_URL`.
+- *`base64: invalid input`:* the value has line breaks or extra characters. Re-encode it
+  with the commands above and paste the whole value.
+- *Release app runs without Firebase:* the log shows `! GOOGLE_SERVICES_JSON not set` or
+  `! GOOGLE_SERVICE_INFO_PLIST not set`. Add the variables to the `firebase` group. The
+  Firebase apps must use the same package name and bundle id as the build.
+
+**Android**
+
+- *"No keystore with reference upload_keystore":* the keystore reference name in
+  Codemagic doesn't match `android_signing` in `codemagic.yaml`.
+- *Play rejects the bundle as debug-signed:* `key.properties` wasn't written (no
+  `✓ android/key.properties` in the log), so `android_signing` isn't set up.
+- *"Keystore was tampered with, or password was incorrect" / "Cannot recover key":*
+  the store password, key alias or key password in Codemagic is wrong.
+- *"Package not found: com.acme.myapp":* the app doesn't exist in Play Console yet, or
+  its first release wasn't uploaded manually.
+- *"The caller does not have permission":* the service account wasn't invited in Play
+  Console, or lacks release permissions. New access can take a while to apply.
+- *"Only releases with status draft may be created on draft app":* keep
+  `submit_as_draft: true` until the app has been published once.
+- *"Version code N has already been used":* `$BUILD_NUMBER` is behind what's on Play.
+  Build from the latest Play number instead:
+
+  ```bash
+  LATEST=$(google-play get-latest-build-number --package-name com.acme.myapp)
+  flutter build appbundle --release --build-number=$((LATEST + 1)) \
+    --dart-define-from-file=env/prod.json
+  ```
+
+**iOS**
+
+- *"No matching profiles found for bundle identifier":* `bundle_identifier` in
+  `codemagic.yaml` doesn't match the app, or no App Store profile was fetched for it.
+- *No valid signing certificate:* add an Apple Distribution certificate in Code signing
+  identities. Apple allows a limited number per team, so revoke unused ones if needed.
+- *"Provisioning profile doesn't include the aps-environment entitlement":* enable Push
+  Notifications on the App ID, then re-fetch the profile (iOS step 5 above).
+- *"The bundle version must be higher than the previously uploaded version":* raise the
+  build number from TestFlight's latest:
+
+  ```bash
+  LATEST=$(app-store-connect get-latest-testflight-build-number "<App Store app id>")
+  flutter build ipa --release --build-number=$((LATEST + 1)) \
+    --export-options-plist=/Users/builder/export_options.plist \
+    --dart-define-from-file=env/prod.json
+  ```
+
+- *Upload succeeds but the build waits on "Missing Compliance":* if the app only uses
+  standard HTTPS, add `ITSAppUsesNonExemptEncryption` = `NO` to `ios/Runner/Info.plist`.
+- *Swift package resolution fails or times out:* usually a network blip, so rerun the build.
+  If it keeps failing, clear the cache (app → **Caching**) and rerun.
+- *Push works locally but not in TestFlight:* upload the APNs key to Firebase (see
+  [Firebase setup](#firebase-setup)) and make sure the App ID has Push Notifications enabled.
+
+**Slow or long builds**
+
+- *Build exceeded the time limit:* raise `max_build_duration` (minutes) for the workflow.
+  The first iOS build is slower because it downloads every Swift package.
+
+---
 
 ## Toolchain notes
 
