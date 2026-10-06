@@ -5,6 +5,8 @@ Production-ready Flutter starter with feature-first clean architecture, BLoC,
 secure token storage, and Firebase (Core, Messaging, Analytics) with local
 notifications.
 
+**Repository:** <https://github.com/asad219/flutter_boiler_plate>
+
 | | |
 |---|---|
 | Flutter / Dart | 3.44+ / `^3.12.2` |
@@ -31,6 +33,8 @@ Starting a real app? Follow
 Runs the boilerplate as is, to try it out:
 
 ```bash
+git clone https://github.com/asad219/flutter_boiler_plate.git
+cd flutter_boiler_plate
 cp env/dev.json.example env/dev.json        # set BASE_URL for your backend
 flutter pub get
 flutter run --dart-define-from-file=env/dev.json
@@ -69,15 +73,11 @@ Compile-time config is injected with `--dart-define-from-file` and read in
 Replace `my_app`, `com.acme.myapp`, `My App` and `YOURTEAMID` with your own values:
 
 ```bash
-# 1. Copy the boilerplate into a new folder and start a fresh git history
-cp -R app_boilerplate my_app        # or: git clone <boilerplate-repo> my_app
+# 1. Clone the boilerplate into a new folder and start a fresh git history
+git clone --depth 1 https://github.com/asad219/flutter_boiler_plate.git my_app
 cd my_app
-rm -rf .git build .dart_tool .idea app_boilerplate.iml \
-  android/.gradle android/local.properties \
-  ios/Flutter/ephemeral ios/Flutter/Generated.xcconfig ios/Flutter/flutter_export_environment.sh \
-  env/dev.json env/staging.json env/prod.json \
-  android/app/google-services.json ios/Runner/GoogleService-Info.plist
-git init && git add -A && git commit -m "Start from app_boilerplate"
+rm -rf .git
+git init && git add -A && git commit -m "Start from flutter_boiler_plate"
 
 # 2. Rename the package, Android id, iOS bundle id and display name
 ./tool/rename_app.sh \
@@ -114,20 +114,40 @@ bundle id.
 - **Android:** Android Studio (or the Android SDK command-line tools) and JDK 17.
 - `perl` and `bash`, used by `tool/rename_app.sh`. Both are preinstalled on macOS and Linux.
 
-### 2. Copy the template
+### 2. Get a copy of the boilerplate
 
-Copy the folder (or clone it), remove generated and machine-specific files, and
-start a fresh git history so the rename shows up as a reviewable diff:
+Clone [asad219/flutter_boiler_plate](https://github.com/asad219/flutter_boiler_plate)
+into a folder named after your app, then replace its git history with a fresh one.
+Your new app shouldn't carry the boilerplate's commits, and a clean first commit
+makes the rename show up as a reviewable diff:
 
 ```bash
-cp -R app_boilerplate my_app        # or: git clone <boilerplate-repo> my_app
+git clone --depth 1 https://github.com/asad219/flutter_boiler_plate.git my_app
 cd my_app
+rm -rf .git
+git init && git add -A && git commit -m "Start from flutter_boiler_plate"
+```
+
+To push the new app to its own GitHub repo, create an **empty** repository on GitHub
+(no README, `.gitignore` or license), then:
+
+```bash
+git remote add origin https://github.com/<you>/my_app.git
+git branch -M main
+git push -u origin main
+```
+
+**Copying a local folder instead of cloning?** Also remove the generated,
+machine-specific and secret files, which a fresh clone never contains:
+
+```bash
+cp -R flutter_boiler_plate my_app && cd my_app
 rm -rf .git build .dart_tool .idea app_boilerplate.iml \
   android/.gradle android/local.properties \
   ios/Flutter/ephemeral ios/Flutter/Generated.xcconfig ios/Flutter/flutter_export_environment.sh \
   env/dev.json env/staging.json env/prod.json \
   android/app/google-services.json ios/Runner/GoogleService-Info.plist
-git init && git add -A && git commit -m "Start from app_boilerplate"
+git init && git add -A && git commit -m "Start from flutter_boiler_plate"
 ```
 
 Flutter recreates all the generated files on the next `flutter pub get`.
@@ -740,4 +760,3 @@ dart format lib test
 - iOS uses **Swift Package Manager** only (all plugins ship SPM packages). If you add a
   CocoaPods-only plugin, Flutter recreates a `Podfile` automatically. Set
   `platform :ios, '15.0'` in it.
-# flutter_boiler_plate
