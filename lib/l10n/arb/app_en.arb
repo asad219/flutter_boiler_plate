@@ -1,0 +1,86 @@
+{
+  "@@locale": "en",
+
+  "languageName": "English",
+  "@languageName": {
+    "description": "This language's name written in itself. Shown in the language switcher."
+  },
+
+  "themeLabel": "Theme",
+  "themeSystem": "System",
+  "themeLight": "Light",
+  "themeDark": "Dark",
+  "languageLabel": "Language",
+  "languageSystem": "System default",
+
+  "confirm": "Confirm",
+  "cancel": "Cancel",
+  "ok": "OK",
+  "loading": "Loading…",
+  "search": "Search",
+  "clearSearch": "Clear search",
+  "noOptions": "No options available",
+  "noResultsFor": "No results for \"{query}\"",
+  "@noResultsFor": {
+    "placeholders": {
+      "query": { "type": "String" }
+    }
+  },
+  "errorTitle": "Something went wrong",
+  "errorUnknown": "Something went wrong. Please try again.",
+  "errorServer": "The server couldn't complete your request. Please try again.",
+  "errorNoConnection": "Please check your internet connection and try again.",
+  "errorTimeout": "The request timed out. Please try again.",
+  "errorSessionExpired": "Your session expired. Please sign in again.",
+  "notFoundTitle": "Page not found",
+  "notFoundMessage": "The page you're looking for doesn't exist.",
+  "goBack": "Go back",
+  "tryAgain": "Try again",
+  "acceptToContinue": "Please accept to continue",
+  "showPassword": "Show password",
+  "hidePassword": "Hide password",
+
+  "validationFieldRequired": "This field is required",
+  "validationRequired": "{field} is required",
+  "@validationRequired": {
+    "placeholders": {
+      "field": { "type": "String" }
+    }
+  },
+  "validationEmailRequired": "Email is required",
+  "validationEmailInvalid": "Enter a valid email address",
+  "validationPasswordRequired": "Password is required",
+  "validationPasswordTooShort": "Password must be at least {min} characters",
+  "@validationPasswordTooShort": {
+    "placeholders": {
+      "min": { "type": "int" }
+    }
+  },
+
+  "loginTitle": "Welcome back",
+  "loginSubtitle": "Sign in to continue",
+  "emailLabel": "Email",
+  "passwordLabel": "Password",
+  "signIn": "Sign in",
+  "signOut": "Sign out",
+  "signOutConfirmTitle": "Sign out?",
+  "signOutConfirmMessage": "You will need to sign in again to use the app.",
+
+  "homeTitle": "Home",
+  "homeGreeting": "Hello, {name} 👋",
+  "@homeGreeting": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "homeGreetingGuest": "Hello 👋",
+
+  "pushTitle": "Push notifications",
+  "pushConfigured": "Configured",
+  "pushNotConfigured": "Not configured",
+  "pushConfiguredMessage": "Firebase is configured.",
+  "pushNotConfiguredMessage": "Firebase is not set up. See \"Firebase setup\" in the README.",
+  "pushCopyToken": "Copy FCM token",
+  "pushTokenCopied": "FCM token copied",
+  "pushEnable": "Enable notifications"
+}

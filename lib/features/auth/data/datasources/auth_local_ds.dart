@@ -6,7 +6,7 @@ import 'package:app_boilerplate/core/services/storage/secure_token_service.dart'
 import 'package:app_boilerplate/core/services/storage/shared_preferences_service.dart';
 import 'package:app_boilerplate/features/auth/data/models/user_model.dart';
 
-/// Tokens live in secure storage; the non-sensitive profile in preferences.
+/// Tokens go to secure storage, the cached user to shared preferences.
 /// Throws [CacheException] on failure.
 abstract interface class AuthLocalDataSource {
   Future<void> saveTokens({required String accessToken, String? refreshToken});

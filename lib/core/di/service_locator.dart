@@ -1,6 +1,6 @@
+import 'package:app_boilerplate/core/localization/locale_cubit.dart';
 import 'package:app_boilerplate/core/network/api_client.dart';
 import 'package:app_boilerplate/core/network/api_interceptors.dart';
-import 'package:app_boilerplate/core/network/network_info.dart';
 import 'package:app_boilerplate/core/services/analytics/analytics_service.dart';
 import 'package:app_boilerplate/core/services/navigation/navigation_service.dart';
 import 'package:app_boilerplate/core/services/notification/fcm_token_registrar.dart';
@@ -11,6 +11,7 @@ import 'package:app_boilerplate/core/services/session/session_expired_notifier.d
 import 'package:app_boilerplate/core/services/storage/secure_storage_service.dart';
 import 'package:app_boilerplate/core/services/storage/secure_token_service.dart';
 import 'package:app_boilerplate/core/services/storage/shared_preferences_service.dart';
+import 'package:app_boilerplate/core/theme/theme_cubit.dart';
 import 'package:app_boilerplate/features/auth/data/datasources/auth_local_ds.dart';
 import 'package:app_boilerplate/features/auth/data/datasources/auth_remote_ds.dart';
 import 'package:app_boilerplate/features/auth/data/repositories/auth_repository_impl.dart';
@@ -25,9 +26,8 @@ import 'package:get_it/get_it.dart';
 
 final GetIt getIt = GetIt.instance;
 
-/// Registration order: core services → network → notifications → features.
-/// Lifetimes: services / data sources / repositories / use cases are lazy
-/// singletons; BLoCs are factories (the widget tree owns their lifecycle).
+/// Registers all dependencies. BLoCs are factories, everything else is a
+/// lazy singleton.
 Future<void> setupLocator() async {
   await _registerCore();
   _registerNetwork();
@@ -49,12 +49,17 @@ Future<void> _registerCore() async {
       dispose: (notifier) => notifier.dispose(),
     )
     ..registerLazySingleton<NavigationService>(NavigationService.new)
-    ..registerLazySingleton<AnalyticsService>(AnalyticsService.new);
+    ..registerLazySingleton<AnalyticsService>(AnalyticsService.new)
+    ..registerFactory<ThemeCubit>(
+      () => ThemeCubit(getIt<SharedPreferencesService>()),
+    )
+    ..registerFactory<LocaleCubit>(
+      () => LocaleCubit(getIt<SharedPreferencesService>()),
+    );
 }
 
 void _registerNetwork() {
   getIt
-    ..registerLazySingleton<NetworkInfo>(() => const NetworkInfoImpl())
     ..registerLazySingleton<Dio>(
       () => Dio(ApiClient.defaultOptions)
         ..interceptors.addAll([
@@ -108,7 +113,6 @@ void _registerAuthFeature() {
       () => AuthRepositoryImpl(
         remoteDataSource: getIt<AuthRemoteDataSource>(),
         localDataSource: getIt<AuthLocalDataSource>(),
-        networkInfo: getIt<NetworkInfo>(),
         sessionExpiredNotifier: getIt<SessionExpiredNotifier>(),
       ),
     )

@@ -9,5 +9,6 @@ class AppKeys {
   // Shared preferences
   static const String cachedUserKey = 'cachedUser';
   static const String fcmTokenKey = 'fcmToken';
-  static const String isDarkThemeKey = 'isDark';
+  static const String themeModeKey = 'themeMode';
+  static const String localeKey = 'locale';
 }

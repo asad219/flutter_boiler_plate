@@ -1,9 +1,7 @@
 import 'dart:async';
 
-/// Broadcasts session expiry (e.g. HTTP 401 with no refresh possible) so the
-/// app can force re-auth.
-///
-/// Debounced: only one notification fires until [rearm] after a successful login.
+/// Tells the app the session expired (401 and the token can't be refreshed).
+/// Fires once until [rearm] is called after the next login.
 class SessionExpiredNotifier {
   final StreamController<void> _controller = StreamController<void>.broadcast();
   bool _armed = true;

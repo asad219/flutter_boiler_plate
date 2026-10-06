@@ -1,7 +1,6 @@
-import 'dart:developer' as developer;
-
 import 'package:app_boilerplate/core/constants/api_endpoints.dart';
 import 'package:app_boilerplate/core/network/api_client.dart';
+import 'package:app_boilerplate/core/utils/app_logger.dart';
 import 'package:app_boilerplate/features/auth/data/models/login_response_model.dart';
 import 'package:app_boilerplate/features/auth/data/models/user_model.dart';
 
@@ -31,7 +30,6 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       ApiEndpoints.login,
       body: {'email': email, 'password': password},
       requiresAuth: false,
-      defaultErrorMessage: 'Login failed',
     );
     return LoginResponseModel.fromJson(json);
   }
@@ -39,12 +37,9 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   @override
   Future<void> logout() async {
     try {
-      await _apiClient.post(
-        ApiEndpoints.logout,
-        defaultErrorMessage: 'Logout failed',
-      );
+      await _apiClient.post(ApiEndpoints.logout);
     } catch (error, stackTrace) {
-      developer.log(
+      AppLogger.warning(
         'Server sign-out failed; local session will still be cleared',
         name: 'AuthRemoteDataSource.logout',
         error: error,
@@ -55,12 +50,9 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<UserModel> getCurrentUser() async {
-    final json = await _apiClient.get(
-      ApiEndpoints.currentUser,
-      defaultErrorMessage: 'Failed to fetch user profile',
-    );
+    final json = await _apiClient.get(ApiEndpoints.currentUser);
 
-    // Handle user data nested under `user` / `data`, or returned directly.
+    // The user can be under `user`, under `data`, or at the top level.
     final nested = json['user'] ?? json['data'];
     if (nested is Map<String, dynamic>) return UserModel.fromJson(nested);
     return UserModel.fromJson(json);

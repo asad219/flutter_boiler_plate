@@ -12,7 +12,7 @@ class UserModel extends UserEntity {
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      // Mongo-style backends return `_id`.
+      // MongoDB returns `_id`.
       id: (json['id'] ?? json['_id'] ?? '').toString(),
       email: json['email'] as String? ?? '',
       firstName: json['firstName'] as String?,

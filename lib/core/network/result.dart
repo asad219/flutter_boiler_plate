@@ -1,6 +1,6 @@
 import 'package:app_boilerplate/core/error/failures.dart';
 
-/// Return type of every repository / use case call: either data or a [Failure].
+/// What repositories and use cases return: data or a [Failure].
 sealed class Result<T> {
   const Result();
 

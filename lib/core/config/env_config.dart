@@ -1,6 +1,4 @@
-/// Compile-time configuration injected via `--dart-define-from-file`.
-///
-/// Example:
+/// Values from the env file:
 /// `flutter run --dart-define-from-file=env/dev.json`
 class EnvConfig {
   EnvConfig._();
@@ -15,7 +13,7 @@ class EnvConfig {
     defaultValue: 'v1',
   );
 
-  /// Lets an app run without Firebase config files (e.g. CI, early dev).
+  /// Set to false to run without Firebase.
   static const bool enableFirebase = bool.fromEnvironment(
     'ENABLE_FIREBASE',
     defaultValue: true,
@@ -25,12 +23,19 @@ class EnvConfig {
   static bool get isStaging => environment == 'staging';
   static bool get isProd => environment == 'prod';
 
-  static void validate() {
+  /// Error message if the config is wrong, or `null` if it's fine.
+  /// The app shows it on a setup screen at startup.
+  static String? get configurationError {
     if (baseUrl.isEmpty) {
-      throw StateError(
-        'BASE_URL is not set. Run with --dart-define-from-file=env/dev.json '
-        '(copy env/dev.json.example to env/dev.json first).',
-      );
+      return 'BASE_URL is not set.\n\n'
+          'Copy env/dev.json.example to env/dev.json, set BASE_URL, then run:\n'
+          'flutter run --dart-define-from-file=env/dev.json';
     }
+    final uri = Uri.tryParse(baseUrl);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+      return 'BASE_URL "$baseUrl" is not a valid URL.\n\n'
+          'Use a full URL such as https://api.example.com';
+    }
+    return null;
   }
 }

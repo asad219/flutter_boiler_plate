@@ -1,12 +1,12 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Centralized helper for secure key-value storage operations.
+/// Wrapper around secure storage.
 class SecureStorageService {
   SecureStorageService({FlutterSecureStorage? storage})
     : _storage = storage ?? _defaultStorage;
 
-  // `first_unlock` keeps tokens readable from background isolates
-  // (e.g. FCM handlers) while the device is locked.
+  // `first_unlock` lets background handlers (like FCM) read tokens while
+  // the device is locked.
   static const FlutterSecureStorage _defaultStorage = FlutterSecureStorage(
     iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
   );

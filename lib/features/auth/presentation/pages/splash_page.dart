@@ -1,14 +1,16 @@
 import 'package:app_boilerplate/core/constants/app_constants.dart';
+import 'package:app_boilerplate/core/constants/app_dimens.dart';
+import 'package:app_boilerplate/core/extensions/context_extensions.dart';
+import 'package:app_boilerplate/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 
-/// Shown while [AuthBloc] resolves the stored session. Navigation away is
-/// driven by the app-level auth listener.
+/// Shown while the saved session is checked. `app.dart` opens the next
+/// screen.
 class SplashPage extends StatelessWidget {
   const SplashPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
       body: Center(
         child: Column(
@@ -17,12 +19,12 @@ class SplashPage extends StatelessWidget {
             Icon(
               Icons.rocket_launch_rounded,
               size: 72,
-              color: theme.colorScheme.primary,
+              color: context.colors.primary,
             ),
-            const SizedBox(height: 16),
-            Text(AppConstants.appName, style: theme.textTheme.headlineMedium),
-            const SizedBox(height: 32),
-            const CircularProgressIndicator(),
+            const SizedBox(height: AppSpacing.lg),
+            Text(AppConstants.appName, style: context.textTheme.headlineMedium),
+            const SizedBox(height: AppSpacing.xxl),
+            const AppLoader(),
           ],
         ),
       ),

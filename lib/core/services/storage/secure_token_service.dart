@@ -2,14 +2,14 @@ import 'package:app_boilerplate/core/constants/app_keys.dart';
 import 'package:app_boilerplate/core/services/storage/secure_storage_service.dart';
 import 'package:flutter/services.dart';
 
-/// Single entry point for reading, writing, and clearing auth tokens.
+/// Reads, saves and clears auth tokens.
 class SecureTokenService {
   SecureTokenService(this._secureStorage);
 
   final SecureStorageService _secureStorage;
 
-  /// In-process cache so API calls while the device is locked / backgrounded
-  /// do not depend on Keystore/Keychain (which can hang or fail when locked).
+  /// Tokens kept in memory, so requests still work when the device is locked
+  /// (Keychain / Keystore can fail then).
   String? _cachedAccessToken;
   String? _cachedRefreshToken;
 
@@ -53,7 +53,7 @@ class SecureTokenService {
 
   Future<bool> hasAuthToken() async => (await getAuthToken()).isNotEmpty;
 
-  /// Warm the in-memory cache while the device is unlocked.
+  /// Loads the tokens into memory while the device is unlocked.
   Future<void> warmCache() async {
     await Future.wait([getAuthToken(), getRefreshToken()]);
   }

@@ -1,21 +1,18 @@
-import 'dart:developer' as developer;
+import 'dart:async';
 import 'dart:io';
 
 import 'package:app_boilerplate/core/error/exceptions.dart';
 import 'package:app_boilerplate/core/error/failures.dart';
 import 'package:app_boilerplate/core/network/result.dart';
+import 'package:app_boilerplate/core/utils/app_logger.dart';
 import 'package:dio/dio.dart';
 
-/// Converts data-layer exceptions into domain [Failure]s.
+/// Turns exceptions into [Failure]s.
 class ErrorHandler {
   ErrorHandler._();
 
-  static Failure toFailure(
-    Object error, {
-    StackTrace? stackTrace,
-    String fallback = ApiException.defaultUserMessage,
-  }) {
-    developer.log(
+  static Failure toFailure(Object error, {StackTrace? stackTrace}) {
+    AppLogger.warning(
       'Mapped error to Failure',
       name: 'ErrorHandler',
       error: error,
@@ -24,50 +21,40 @@ class ErrorHandler {
 
     final exception = switch (error) {
       ApiException() => error,
-      DioException() => ApiException.fromDioException(
-        error,
-        fallback: fallback,
-      ),
+      DioException() => ApiException.fromDioException(error),
       _ => null,
     };
 
     if (exception != null) {
-      if (exception.isUnauthorized) {
-        return UnauthorizedFailure(
-          ApiException.sanitizeDisplayMessage(
-            exception.userMessage,
-            fallback: ApiException.sessionExpiredMessage,
-          ),
-        );
-      }
-      if (exception.userMessage == ApiException.noConnectionMessage) {
-        return const NetworkFailure();
-      }
-      return ServerFailure(
-        ApiException.toUserMessage(exception, fallback: fallback),
-        statusCode: exception.statusCode,
-      );
+      return switch (exception.type) {
+        ApiErrorType.server => ServerFailure(
+          message: exception.message,
+          statusCode: exception.statusCode,
+        ),
+        ApiErrorType.unauthorized => UnauthorizedFailure(
+          message: exception.message,
+        ),
+        ApiErrorType.noConnection => const NetworkFailure(),
+        ApiErrorType.timeout => const TimeoutFailure(),
+        ApiErrorType.cancelled ||
+        ApiErrorType.unexpected => const UnknownFailure(),
+      };
     }
 
-    if (error is SocketException) return const NetworkFailure();
-    if (error is CacheException) return CacheFailure(error.message);
-
-    return UnknownFailure(
-      ApiException.toUserMessage(error, fallback: fallback),
-    );
+    return switch (error) {
+      SocketException() => const NetworkFailure(),
+      TimeoutException() => const TimeoutFailure(),
+      CacheException() => const CacheFailure(),
+      _ => const UnknownFailure(),
+    };
   }
 
-  /// Runs [action] and wraps the outcome in a [Result].
-  static Future<Result<T>> guard<T>(
-    Future<T> Function() action, {
-    String fallback = ApiException.defaultUserMessage,
-  }) async {
+  /// Runs [action] and returns a [Result].
+  static Future<Result<T>> guard<T>(Future<T> Function() action) async {
     try {
       return Success(await action());
     } catch (error, stackTrace) {
-      return Failed(
-        toFailure(error, stackTrace: stackTrace, fallback: fallback),
-      );
+      return Failed(toFailure(error, stackTrace: stackTrace));
     }
   }
 }

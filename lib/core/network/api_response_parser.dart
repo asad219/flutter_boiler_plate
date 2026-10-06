@@ -1,6 +1,6 @@
 import 'package:app_boilerplate/core/error/exceptions.dart';
 
-/// Shared helpers for unwrapping and parsing API JSON responses.
+/// Helpers to read models from API responses.
 class ApiResponseParser {
   ApiResponseParser._();
 
@@ -8,37 +8,34 @@ class ApiResponseParser {
 
   static T parseObject<T>(
     Map<String, dynamic> json,
-    T Function(Map<String, dynamic>) fromJson, {
-    String unexpectedFormatMessage = 'Unexpected response format',
-  }) {
+    T Function(Map<String, dynamic>) fromJson,
+  ) {
     final decoded = unwrapData(json);
 
     if (decoded is Map<String, dynamic>) {
       return fromJson(decoded);
     }
 
-    throw ApiException(userMessage: unexpectedFormatMessage);
+    throw const ApiException(type: ApiErrorType.unexpected);
   }
 
   static List<T> parseList<T>(
     Map<String, dynamic> json,
-    T Function(Map<String, dynamic>) fromJson, {
-    String unexpectedFormatMessage = 'Unexpected response format',
-  }) {
+    T Function(Map<String, dynamic>) fromJson,
+  ) {
     final decoded = unwrapData(json);
 
     if (decoded is List) {
       return decoded.whereType<Map<String, dynamic>>().map(fromJson).toList();
     }
 
-    throw ApiException(userMessage: unexpectedFormatMessage);
+    throw const ApiException(type: ApiErrorType.unexpected);
   }
 
   static List<T> parseListOrSingle<T>(
     Map<String, dynamic> json,
-    T Function(Map<String, dynamic>) fromJson, {
-    String unexpectedFormatMessage = 'Unexpected response format',
-  }) {
+    T Function(Map<String, dynamic>) fromJson,
+  ) {
     final decoded = unwrapData(json);
 
     if (decoded is List) {
@@ -49,6 +46,6 @@ class ApiResponseParser {
       return [fromJson(decoded)];
     }
 
-    throw ApiException(userMessage: unexpectedFormatMessage);
+    throw const ApiException(type: ApiErrorType.unexpected);
   }
 }

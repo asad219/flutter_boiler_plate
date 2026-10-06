@@ -26,7 +26,7 @@ class AuthLogoutRequested extends AuthEvent {
   const AuthLogoutRequested();
 }
 
-/// Dispatched internally when [SessionExpiredNotifier] fires.
+/// Added by the bloc itself when the session expires.
 class AuthSessionExpired extends AuthEvent {
   const AuthSessionExpired();
 }

@@ -1,106 +1,115 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
 
-/// Typed HTTP/API error with a safe message for UI display.
-///
-/// Thrown by the data layer (API client, remote data sources) and converted
-/// to a [Failure] by repositories via [ErrorHandler].
-class ApiException implements Exception {
-  const ApiException({this.statusCode, required this.userMessage, this.cause});
+/// Error types. The UI shows a translated message for each one.
+enum ApiErrorType {
+  /// The server returned an error (4xx / 5xx).
+  server,
 
+  /// 401: wrong or expired login.
+  unauthorized,
+
+  /// No internet, or the server can't be reached.
+  noConnection,
+
+  /// The request took too long.
+  timeout,
+
+  /// Cancelled with a `CancelToken`.
+  cancelled,
+
+  /// Bad response or any other error.
+  unexpected,
+}
+
+/// Error thrown by the data layer. Repositories turn it into a `Failure`.
+class ApiException implements Exception {
+  const ApiException({
+    this.type = ApiErrorType.server,
+    this.statusCode,
+    this.message,
+    this.cause,
+  });
+
+  final ApiErrorType type;
   final int? statusCode;
-  final String userMessage;
+
+  /// Message from the server (e.g. "Email already taken"). When `null`, the
+  /// app shows its own message.
+  final String? message;
+
+  /// Original error, for logs only.
   final Object? cause;
 
-  static const String defaultUserMessage =
-      'Something went wrong. Please try again.';
-  static const String timeoutMessage = 'Request timed out';
-  static const String noConnectionMessage =
-      'Please check your internet connection and try again.';
-  static const String sessionExpiredMessage =
-      'Your session expired. Please sign in again.';
-  static const String authRequiredMessage =
-      'Authentication required. Please sign in again.';
+  bool get isUnauthorized => type == ApiErrorType.unauthorized;
 
-  bool get isUnauthorized => statusCode == 401;
-
-  factory ApiException.fromResponse(
-    Response<dynamic>? response,
-    String fallback,
-  ) {
-    final message = _messageFromBody(response?.data, fallback);
-    return ApiException(statusCode: response?.statusCode, userMessage: message);
+  factory ApiException.fromResponse(Response<dynamic>? response) {
+    final statusCode = response?.statusCode;
+    return ApiException(
+      type: statusCode == 401 ? ApiErrorType.unauthorized : ApiErrorType.server,
+      statusCode: statusCode,
+      message: _messageFromBody(response?.data),
+    );
   }
 
-  /// Maps any [DioException] to a user-safe [ApiException].
-  factory ApiException.fromDioException(
-    DioException exception, {
-    String fallback = defaultUserMessage,
-  }) {
+  /// Converts a [DioException].
+  factory ApiException.fromDioException(DioException exception) {
     final inner = exception.error;
     if (inner is ApiException) return inner;
 
-    switch (exception.type) {
-      case DioExceptionType.connectionTimeout:
-      case DioExceptionType.sendTimeout:
-      case DioExceptionType.receiveTimeout:
-      case DioExceptionType.transformTimeout:
-        return ApiException(userMessage: timeoutMessage, cause: exception);
-      case DioExceptionType.badResponse:
-        final response = exception.response;
-        if (response?.statusCode == 401) {
-          return ApiException(
-            statusCode: 401,
-            userMessage: sessionExpiredMessage,
-            cause: exception,
-          );
-        }
-        return ApiException.fromResponse(response, fallback);
-      case DioExceptionType.connectionError:
-        return ApiException(userMessage: noConnectionMessage, cause: exception);
-      case DioExceptionType.unknown:
-        if (inner is SocketException) {
-          return ApiException(
-            userMessage: noConnectionMessage,
-            cause: exception,
-          );
-        }
-        return ApiException(userMessage: fallback, cause: exception);
-      case DioExceptionType.cancel:
-      case DioExceptionType.badCertificate:
-        return ApiException(userMessage: fallback, cause: exception);
-    }
+    return switch (exception.type) {
+      DioExceptionType.connectionTimeout ||
+      DioExceptionType.sendTimeout ||
+      DioExceptionType.receiveTimeout ||
+      DioExceptionType.transformTimeout => ApiException(
+        type: ApiErrorType.timeout,
+        cause: exception,
+      ),
+      DioExceptionType.badResponse => ApiException.fromResponse(
+        exception.response,
+      ),
+      DioExceptionType.connectionError => ApiException(
+        type: ApiErrorType.noConnection,
+        cause: exception,
+      ),
+      DioExceptionType.cancel => ApiException(
+        type: ApiErrorType.cancelled,
+        cause: exception,
+      ),
+      DioExceptionType.unknown when inner is SocketException => ApiException(
+        type: ApiErrorType.noConnection,
+        cause: exception,
+      ),
+      DioExceptionType.unknown || DioExceptionType.badCertificate =>
+        ApiException(type: ApiErrorType.unexpected, cause: exception),
+    };
   }
 
-  /// Extracts a short, human-readable message from an API error body.
-  /// Never returns raw JSON payloads or technical dumps.
-  static String _messageFromBody(Object? body, String fallback) {
-    if (body == null) return fallback;
+  /// Gets a short message from an error body. Never returns raw JSON.
+  static String? _messageFromBody(Object? body) {
     if (body is String) {
-      if (body.isEmpty) return fallback;
+      if (body.isEmpty) return null;
       try {
-        final decoded = jsonDecode(body);
-        final extracted = _extractMessage(decoded);
-        return sanitizeDisplayMessage(extracted, fallback: fallback);
+        return sanitize(_extractMessage(jsonDecode(body)));
       } catch (_) {
-        // Body is not JSON — never show raw response text.
-        return fallback;
+        // Not JSON (maybe an HTML page), so don't show it.
+        return null;
       }
     }
-    return sanitizeDisplayMessage(_extractMessage(body), fallback: fallback);
+    return sanitize(_extractMessage(body));
   }
 
-  /// Pulls the best user-facing string from common Nest/Zod error shapes.
+  /// Finds the message in common formats: `message`, `error`, `detail`,
+  /// `errors`.
   static String? _extractMessage(Object? json) {
     if (json == null) return null;
 
     if (json is String) {
       final trimmed = json.trim();
       if (trimmed.isEmpty) return null;
-      // Sometimes APIs stringify a JSON error array/object into `message`.
+      // Some APIs put JSON as a string inside `message`.
       if (_looksLikeJson(trimmed)) {
         try {
           return _extractMessage(jsonDecode(trimmed));
@@ -120,75 +129,20 @@ class ApiException implements Exception {
     }
 
     if (json is Map) {
-      final map = Map<String, dynamic>.from(json);
-
-      // Prefer field-level validation messages.
-      final nested =
-          _extractMessage(map['message']) ??
-          _extractMessage(map['error']) ??
-          _extractMessage(map['detail']) ??
-          _extractMessage(map['errors']);
-      if (nested != null && nested.isNotEmpty) return nested;
-
-      return null;
+      return _extractMessage(json['message']) ??
+          _extractMessage(json['error']) ??
+          _extractMessage(json['detail']) ??
+          _extractMessage(json['errors']);
     }
 
     return null;
   }
 
-  /// Maps any caught error to a user-safe message for BLoC/UI layers.
-  static String toUserMessage(
-    Object error, {
-    String fallback = defaultUserMessage,
-  }) {
-    if (error is ApiException) {
-      return sanitizeDisplayMessage(error.userMessage, fallback: fallback);
-    }
-
-    if (error is DioException) {
-      return sanitizeDisplayMessage(
-        ApiException.fromDioException(error, fallback: fallback).userMessage,
-        fallback: fallback,
-      );
-    }
-
-    // Network / filesystem / timeout failures must never surface internals.
-    if (error is SocketException ||
-        error is HttpException ||
-        error is HandshakeException ||
-        error is TlsException ||
-        error is FileSystemException ||
-        error is IOException ||
-        error is TimeoutException ||
-        error is FormatException) {
-      return fallback;
-    }
-
-    if (error is Exception || error is Error) {
-      final raw = error.toString();
-      const prefixes = ['Exception: ', 'Error: ', 'Bad state: '];
-      var message = raw;
-      for (final prefix in prefixes) {
-        if (message.startsWith(prefix)) {
-          message = message.substring(prefix.length);
-          break;
-        }
-      }
-      return sanitizeDisplayMessage(message, fallback: fallback);
-    }
-
-    return fallback;
-  }
-
-  /// Final guard for any string about to be shown in UI (toast, screen, etc.).
-  static String sanitizeDisplayMessage(
-    String? message, {
-    String fallback = defaultUserMessage,
-  }) {
-    if (message == null) return fallback;
-    final trimmed = message.trim();
-    if (trimmed.isEmpty) return fallback;
-    if (_looksTechnical(trimmed)) return fallback;
+  /// Returns [message] if it's OK to show to users, otherwise `null`.
+  static String? sanitize(String? message) {
+    final trimmed = message?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    if (_looksTechnical(trimmed)) return null;
     return trimmed;
   }
 
@@ -225,27 +179,28 @@ class ApiException implements Exception {
       if (lower.contains(marker)) return true;
     }
 
-    // Long dumps with many braces/quotes are almost never user copy.
+    // Lots of brackets and quotes means data, not a message.
     final braceCount =
         '{'.allMatches(message).length +
         '}'.allMatches(message).length +
         '['.allMatches(message).length +
         ']'.allMatches(message).length;
-    if (braceCount >= 4 && message.contains('"')) return true;
-
-    return false;
+    return braceCount >= 4 && message.contains('"');
   }
 
   @override
-  String toString() => userMessage;
+  String toString() =>
+      'ApiException(type: ${type.name}, statusCode: $statusCode, '
+      'message: $message, cause: $cause)';
 }
 
-/// Thrown by local data sources when reading/writing persisted data fails.
+/// Thrown when reading or saving local data fails.
 class CacheException implements Exception {
   const CacheException([this.message = 'Failed to access local data.']);
 
+  /// For logs only, not shown to users.
   final String message;
 
   @override
-  String toString() => message;
+  String toString() => 'CacheException: $message';
 }

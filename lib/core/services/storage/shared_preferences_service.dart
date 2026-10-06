@@ -1,6 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Thin wrapper around [SharedPreferences] for non-sensitive data.
+/// Wrapper around [SharedPreferences] for non-sensitive data.
 class SharedPreferencesService {
   SharedPreferencesService(this._prefs);
 

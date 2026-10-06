@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:app_boilerplate/core/error/exceptions.dart';
+import 'package:app_boilerplate/core/error/failures.dart';
 import 'package:app_boilerplate/core/services/session/session_expired_notifier.dart';
 import 'package:app_boilerplate/core/usecase/usecase.dart';
 import 'package:app_boilerplate/features/auth/domain/entities/user_entity.dart';
@@ -13,19 +13,14 @@ import 'package:equatable/equatable.dart';
 part 'auth_event.dart';
 part 'auth_state.dart';
 
-/// App-wide session state.
-///
-/// AuthInitial → (check) → Authenticated | Unauthenticated
-/// Unauthenticated → AuthLoading → Authenticated | Unauthenticated(message)
-/// Authenticated → AuthLoading → Unauthenticated (logout)
-/// Authenticated → Unauthenticated(message) (session expired)
+/// Handles login, logout, session restore and session expiry.
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   AuthBloc({
     required this._loginUseCase,
     required this._logoutUseCase,
     required this._getCurrentUserUseCase,
     required SessionExpiredNotifier sessionExpiredNotifier,
-  }) : super(const AuthInitial()) {
+  }) : super(const AuthState()) {
     on<AuthCheckRequested>(_onAuthCheckRequested);
     on<AuthLoginSubmitted>(_onAuthLoginSubmitted);
     on<AuthLogoutRequested>(_onAuthLogoutRequested);
@@ -47,23 +42,34 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     final result = await _getCurrentUserUseCase(const NoParams());
     final user = result.dataOrNull;
-    emit(user != null ? Authenticated(user) : const Unauthenticated());
+    emit(
+      user != null
+          ? state.copyWith(status: AuthStatus.authenticated, user: user)
+          : state.copyWith(status: AuthStatus.unauthenticated, clearUser: true),
+    );
   }
 
   Future<void> _onAuthLoginSubmitted(
     AuthLoginSubmitted event,
     Emitter<AuthState> emit,
   ) async {
-    if (state is AuthLoading) return;
-    emit(const AuthLoading());
+    if (state.status == AuthStatus.loading) return;
+    emit(state.copyWith(status: AuthStatus.loading));
 
     final result = await _loginUseCase(
       LoginParams(email: event.email, password: event.password),
     );
 
     result.fold(
-      (failure) => emit(Unauthenticated(message: failure.message)),
-      (user) => emit(Authenticated(user)),
+      (failure) => emit(
+        state.copyWith(
+          status: AuthStatus.unauthenticated,
+          clearUser: true,
+          failure: failure,
+        ),
+      ),
+      (user) =>
+          emit(state.copyWith(status: AuthStatus.authenticated, user: user)),
     );
   }
 
@@ -71,17 +77,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthLogoutRequested event,
     Emitter<AuthState> emit,
   ) async {
-    emit(const AuthLoading());
+    emit(state.copyWith(status: AuthStatus.loading));
     await _logoutUseCase(const NoParams());
-    emit(const Unauthenticated());
+    emit(state.copyWith(status: AuthStatus.unauthenticated, clearUser: true));
   }
 
   void _onAuthSessionExpired(
     AuthSessionExpired event,
     Emitter<AuthState> emit,
   ) {
-    if (state is Unauthenticated) return;
-    emit(const Unauthenticated(message: ApiException.sessionExpiredMessage));
+    if (state.status == AuthStatus.unauthenticated) return;
+    emit(
+      state.copyWith(
+        status: AuthStatus.unauthenticated,
+        clearUser: true,
+        failure: const UnauthorizedFailure(),
+      ),
+    );
   }
 
   @override

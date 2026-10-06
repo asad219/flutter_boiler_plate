@@ -1,25 +1,20 @@
-import 'dart:developer' as developer;
-
 import 'package:app_boilerplate/core/constants/api_endpoints.dart';
 import 'package:app_boilerplate/core/error/exceptions.dart';
 import 'package:app_boilerplate/core/network/api_client.dart';
 import 'package:app_boilerplate/core/network/api_response_parser.dart';
 import 'package:app_boilerplate/core/services/session/session_expired_notifier.dart';
 import 'package:app_boilerplate/core/services/storage/secure_token_service.dart';
+import 'package:app_boilerplate/core/utils/app_logger.dart';
 import 'package:dio/dio.dart';
 
-/// Injects the bearer token and transparently refreshes it on 401.
-///
-/// Queued so concurrent 401s trigger a single refresh; requests that failed
-/// with an already-replaced token are simply retried with the new one.
-/// When no refresh is possible the session is cleared and
-/// [SessionExpiredNotifier] fires.
+/// Adds the token to requests. On a 401 it refreshes the token once and
+/// retries. If that isn't possible, the user is signed out.
 class AuthInterceptor extends QueuedInterceptor {
   AuthInterceptor({
     required this._tokenService,
     required this._sessionExpiredNotifier,
     Dio? refreshDio,
-  }) : // Interceptor-free client so refresh/retry calls never re-enter this queue.
+  }) : // Plain Dio without interceptors, so refresh calls don't loop.
        _plainDio = refreshDio ?? Dio(ApiClient.defaultOptions);
 
   final SecureTokenService _tokenService;
@@ -41,8 +36,8 @@ class AuthInterceptor extends QueuedInterceptor {
         DioException(
           requestOptions: options,
           error: const ApiException(
+            type: ApiErrorType.unauthorized,
             statusCode: 401,
-            userMessage: ApiException.authRequiredMessage,
           ),
         ),
       );
@@ -110,7 +105,7 @@ class AuthInterceptor extends QueuedInterceptor {
       );
       return accessToken;
     } catch (e, stackTrace) {
-      developer.log(
+      AppLogger.warning(
         'Token refresh failed',
         name: 'AuthInterceptor',
         error: e,
@@ -134,38 +129,42 @@ class AuthInterceptor extends QueuedInterceptor {
   }
 }
 
-/// Normalizes every [DioException] so `error` is a user-safe [ApiException].
+/// Turns every Dio error into an [ApiException].
 class ErrorInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    final fallback =
-        err.requestOptions.extra[ApiClient.defaultErrorMessageKey] as String? ??
-        ApiException.defaultUserMessage;
-    handler.next(
-      err.copyWith(
-        error: ApiException.fromDioException(err, fallback: fallback),
-      ),
-    );
+    handler.next(err.copyWith(error: ApiException.fromDioException(err)));
   }
 }
 
-/// Debug-only request/response logging with sensitive headers redacted.
+/// Logs requests in debug builds. Passwords and tokens are hidden.
 class LoggingInterceptor extends Interceptor {
   static const String _startTimeKey = 'requestStartTime';
-  static const Set<String> _redactedHeaders = {'authorization', 'cookie'};
+  static const String _mask = '***';
+
+  /// Keys (lower case) whose values are hidden in logs.
+  static const Set<String> _sensitiveKeys = {
+    'authorization',
+    'cookie',
+    'set-cookie',
+    'password',
+    'currentpassword',
+    'newpassword',
+    'confirmpassword',
+    'token',
+    'accesstoken',
+    'refreshtoken',
+    'otp',
+    'pin',
+  };
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     options.extra[_startTimeKey] = DateTime.now();
-    final headers = {
-      for (final entry in options.headers.entries)
-        entry.key: _redactedHeaders.contains(entry.key.toLowerCase())
-            ? '***'
-            : entry.value,
-    };
-    developer.log(
-      '→ ${options.method} ${options.uri}\nheaders: $headers'
-      '${options.data != null ? '\nbody: ${options.data}' : ''}',
+    final body = options.data == null ? '' : '\nbody: ${_redact(options.data)}';
+    AppLogger.debug(
+      '→ ${options.method} ${options.uri}\n'
+      'headers: ${_redact(options.headers)}$body',
       name: 'HTTP',
     );
     handler.next(options);
@@ -176,7 +175,7 @@ class LoggingInterceptor extends Interceptor {
     Response<dynamic> response,
     ResponseInterceptorHandler handler,
   ) {
-    developer.log(
+    AppLogger.debug(
       '← ${response.statusCode} ${response.requestOptions.method} '
       '${response.requestOptions.uri} ${_elapsed(response.requestOptions)}',
       name: 'HTTP',
@@ -186,7 +185,7 @@ class LoggingInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    developer.log(
+    AppLogger.warning(
       '✕ ${err.response?.statusCode ?? err.type.name} '
       '${err.requestOptions.method} ${err.requestOptions.uri} '
       '${_elapsed(err.requestOptions)}',
@@ -194,6 +193,19 @@ class LoggingInterceptor extends Interceptor {
       error: err.error ?? err.message,
     );
     handler.next(err);
+  }
+
+  static Object? _redact(Object? value) {
+    if (value is Map) {
+      return {
+        for (final entry in value.entries)
+          entry.key: _sensitiveKeys.contains('${entry.key}'.toLowerCase())
+              ? _mask
+              : _redact(entry.value),
+      };
+    }
+    if (value is List) return value.map(_redact).toList();
+    return value;
   }
 
   static String _elapsed(RequestOptions options) {

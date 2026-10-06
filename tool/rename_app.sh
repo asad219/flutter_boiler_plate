@@ -50,7 +50,7 @@ replace() {
 
 echo "→ Dart package: $OLD_PACKAGE → $NEW_PACKAGE"
 replace "name: $OLD_PACKAGE" "name: $NEW_PACKAGE" pubspec.yaml
-find lib test -name '*.dart' -print0 | while IFS= read -r -d '' file; do
+find lib -name '*.dart' -print0 | while IFS= read -r -d '' file; do
   replace "package:$OLD_PACKAGE/" "package:$NEW_PACKAGE/" "$file"
 done
 
@@ -79,4 +79,4 @@ echo "→ Refreshing dependencies"
 flutter clean >/dev/null
 flutter pub get >/dev/null
 
-echo "✓ Done. Next: add Firebase config for the new ids (see README › Firebase setup)."
+echo "✓ Done. Next: add Firebase config for the new ids (see "Firebase setup" in README.md)."

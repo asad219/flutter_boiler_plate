@@ -1,4 +1,4 @@
-/// Relative API paths. The base URL and version come from [EnvConfig].
+/// API paths. The base URL comes from [EnvConfig].
 class ApiEndpoints {
   ApiEndpoints._();
 

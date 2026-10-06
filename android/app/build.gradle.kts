@@ -7,9 +7,11 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Firebase is optional until `google-services.json` is added (see README).
+// Firebase plugins are only applied when google-services.json exists.
+// Without the Crashlytics plugin the app crashes on start ("build ID is missing").
 if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
 }
 
 // Release signing comes from `android/key.properties` (git-ignored). CI writes it

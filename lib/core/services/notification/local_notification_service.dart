@@ -1,22 +1,22 @@
 import 'dart:convert';
-import 'dart:developer' as developer;
 
+import 'package:app_boilerplate/core/utils/app_logger.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 typedef NotificationTapCallback = void Function(String? payload);
 
-/// Invoked on a background isolate when a notification action is tapped
-/// without bringing the app to the foreground.
+/// Runs in the background when a notification action is tapped without
+/// opening the app.
 @pragma('vm:entry-point')
 void onBackgroundNotificationResponse(NotificationResponse response) {
-  developer.log(
+  AppLogger.debug(
     'Background notification action: ${response.actionId}',
     name: 'LocalNotificationService',
   );
 }
 
-/// Wraps [FlutterLocalNotificationsPlugin]: channel setup, display, and taps.
+/// Shows local notifications and handles taps.
 class LocalNotificationService {
   LocalNotificationService({FlutterLocalNotificationsPlugin? plugin})
     : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
@@ -35,14 +35,13 @@ class LocalNotificationService {
         importance: Importance.high,
       );
 
-  /// [onTap] also fires once if the app was launched by tapping a local
-  /// notification while terminated.
+  /// [onTap] is also called if the app was opened from a notification.
   Future<void> initialize({NotificationTapCallback? onTap}) async {
     if (_initialized) return;
 
     const settings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      // Permissions are requested explicitly via [requestPermission].
+      // Permission is asked later in [requestPermission].
       iOS: DarwinInitializationSettings(
         requestAlertPermission: false,
         requestBadgePermission: false,

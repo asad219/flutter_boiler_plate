@@ -1,39 +1,36 @@
 import 'dart:convert';
-import 'dart:developer' as developer;
 
+import 'package:app_boilerplate/core/config/env_config.dart';
 import 'package:app_boilerplate/core/constants/app_constants.dart';
 import 'package:app_boilerplate/core/error/exceptions.dart';
+import 'package:app_boilerplate/core/utils/app_logger.dart';
 import 'package:dio/dio.dart';
 
-/// Thin, typed wrapper around [Dio].
-///
-/// Every call returns the decoded JSON body as `Map<String, dynamic>`
-/// (top-level arrays are wrapped as `{'data': [...]}`) and throws
-/// [ApiException] on failure. Pair with [ApiResponseParser] to map models.
+/// Small wrapper around [Dio]. Every call returns the JSON body as a map (a
+/// list comes back as `{'data': [...]}`) and throws [ApiException] on errors.
 class ApiClient {
   ApiClient(this._dio);
 
   final Dio _dio;
 
-  /// [RequestOptions.extra] keys read by the interceptors.
+  /// Keys in [RequestOptions.extra] used by the interceptors.
   static const String requiresAuthKey = 'requiresAuth';
-  static const String defaultErrorMessageKey = 'defaultErrorMessage';
 
   static const List<int> defaultSuccessCodes = [200, 201];
 
   /// `BASE_URL` + `API_VERSION`, e.g. `https://api.example.com/api/v1`.
   static String get baseUrl {
-    final base = AppConstants.baseUrl;
-    final version = AppConstants.apiVersion;
+    const base = EnvConfig.baseUrl;
+    const version = EnvConfig.apiVersion;
     if (version.isEmpty) return base;
     return base.endsWith('/') ? '$base$version' : '$base/$version';
   }
 
   static BaseOptions get defaultOptions => BaseOptions(
     baseUrl: baseUrl,
-    connectTimeout: const Duration(milliseconds: AppConstants.timeoutDuration),
-    receiveTimeout: const Duration(milliseconds: AppConstants.timeoutDuration),
-    sendTimeout: const Duration(milliseconds: AppConstants.timeoutDuration),
+    connectTimeout: AppConstants.requestTimeout,
+    receiveTimeout: AppConstants.requestTimeout,
+    sendTimeout: AppConstants.requestTimeout,
     responseType: ResponseType.json,
     headers: const {Headers.acceptHeader: Headers.jsonContentType},
   );
@@ -43,7 +40,6 @@ class ApiClient {
     Map<String, dynamic>? queryParameters,
     bool requiresAuth = true,
     List<int> successCodes = defaultSuccessCodes,
-    String? defaultErrorMessage,
     Duration? timeout,
     CancelToken? cancelToken,
   }) {
@@ -53,7 +49,6 @@ class ApiClient {
       queryParameters: queryParameters,
       requiresAuth: requiresAuth,
       successCodes: successCodes,
-      defaultErrorMessage: defaultErrorMessage ?? 'Request failed',
       timeout: timeout,
       cancelToken: cancelToken,
     );
@@ -65,7 +60,6 @@ class ApiClient {
     Map<String, dynamic>? queryParameters,
     bool requiresAuth = true,
     List<int> successCodes = defaultSuccessCodes,
-    String? defaultErrorMessage,
     Duration? timeout,
     CancelToken? cancelToken,
   }) {
@@ -76,7 +70,6 @@ class ApiClient {
       queryParameters: queryParameters,
       requiresAuth: requiresAuth,
       successCodes: successCodes,
-      defaultErrorMessage: defaultErrorMessage ?? 'Request failed',
       timeout: timeout,
       cancelToken: cancelToken,
     );
@@ -85,9 +78,9 @@ class ApiClient {
   Future<Map<String, dynamic>> put(
     String endpoint, {
     Object? body,
+    Map<String, dynamic>? queryParameters,
     bool requiresAuth = true,
     List<int> successCodes = defaultSuccessCodes,
-    String? defaultErrorMessage,
     Duration? timeout,
     CancelToken? cancelToken,
   }) {
@@ -95,9 +88,9 @@ class ApiClient {
       'PUT',
       endpoint,
       body: body,
+      queryParameters: queryParameters,
       requiresAuth: requiresAuth,
       successCodes: successCodes,
-      defaultErrorMessage: defaultErrorMessage ?? 'Update request failed',
       timeout: timeout,
       cancelToken: cancelToken,
     );
@@ -106,9 +99,9 @@ class ApiClient {
   Future<Map<String, dynamic>> patch(
     String endpoint, {
     Object? body,
+    Map<String, dynamic>? queryParameters,
     bool requiresAuth = true,
     List<int> successCodes = defaultSuccessCodes,
-    String? defaultErrorMessage,
     Duration? timeout,
     CancelToken? cancelToken,
   }) {
@@ -116,9 +109,9 @@ class ApiClient {
       'PATCH',
       endpoint,
       body: body,
+      queryParameters: queryParameters,
       requiresAuth: requiresAuth,
       successCodes: successCodes,
-      defaultErrorMessage: defaultErrorMessage ?? 'Update request failed',
       timeout: timeout,
       cancelToken: cancelToken,
     );
@@ -127,9 +120,9 @@ class ApiClient {
   Future<Map<String, dynamic>> delete(
     String endpoint, {
     Object? body,
+    Map<String, dynamic>? queryParameters,
     bool requiresAuth = true,
     List<int> successCodes = const [200, 202, 204],
-    String? defaultErrorMessage,
     Duration? timeout,
     CancelToken? cancelToken,
   }) {
@@ -137,9 +130,9 @@ class ApiClient {
       'DELETE',
       endpoint,
       body: body,
+      queryParameters: queryParameters,
       requiresAuth: requiresAuth,
       successCodes: successCodes,
-      defaultErrorMessage: defaultErrorMessage ?? 'Delete request failed',
       timeout: timeout,
       cancelToken: cancelToken,
     );
@@ -152,7 +145,6 @@ class ApiClient {
     Map<String, dynamic>? queryParameters,
     required bool requiresAuth,
     required List<int> successCodes,
-    required String defaultErrorMessage,
     Duration? timeout,
     CancelToken? cancelToken,
   }) async {
@@ -168,26 +160,20 @@ class ApiClient {
           sendTimeout: body != null ? timeout : null,
           validateStatus: (status) =>
               status != null && successCodes.contains(status),
-          extra: {
-            requiresAuthKey: requiresAuth,
-            defaultErrorMessageKey: defaultErrorMessage,
-          },
+          extra: {requiresAuthKey: requiresAuth},
         ),
       );
-      return _decodeBody(response, defaultErrorMessage);
+      return _decodeBody(response);
     } on DioException catch (e) {
-      throw ApiException.fromDioException(e, fallback: defaultErrorMessage);
+      throw ApiException.fromDioException(e);
     }
   }
 
   static String _normalizePath(String endpoint) =>
       endpoint.startsWith('/') ? endpoint : '/$endpoint';
 
-  /// Normalizes any response body into a JSON map.
-  static Map<String, dynamic> _decodeBody(
-    Response<dynamic> response,
-    String defaultErrorMessage,
-  ) {
+  /// Turns any response body into a map.
+  static Map<String, dynamic> _decodeBody(Response<dynamic> response) {
     final data = response.data;
     if (data == null) return {};
     if (data is Map<String, dynamic>) return data;
@@ -201,15 +187,15 @@ class ApiClient {
         if (json is Map<String, dynamic>) return json;
         return {'data': json};
       } catch (e, stackTrace) {
-        developer.log(
+        AppLogger.error(
           'Failed to decode response body as JSON',
           name: 'ApiClient',
           error: e,
           stackTrace: stackTrace,
         );
         throw ApiException(
+          type: ApiErrorType.unexpected,
           statusCode: response.statusCode,
-          userMessage: defaultErrorMessage,
           cause: e,
         );
       }

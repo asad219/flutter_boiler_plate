@@ -1,11 +1,9 @@
-import 'dart:developer' as developer;
-
 import 'package:app_boilerplate/core/services/firebase/firebase_bootstrap.dart';
+import 'package:app_boilerplate/core/utils/app_logger.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/widgets.dart';
 
-/// Firebase Analytics wrapper. Becomes a no-op when Firebase isn't initialized
-/// so callers never need to guard.
+/// Firebase Analytics wrapper. Does nothing when Firebase isn't set up.
 class AnalyticsService {
   FirebaseAnalytics? get _analytics =>
       FirebaseBootstrap.isInitialized ? FirebaseAnalytics.instance : null;
@@ -46,7 +44,7 @@ class AnalyticsService {
     try {
       await action(analytics);
     } catch (e, stackTrace) {
-      developer.log(
+      AppLogger.warning(
         'Analytics call failed',
         name: 'AnalyticsService',
         error: e,

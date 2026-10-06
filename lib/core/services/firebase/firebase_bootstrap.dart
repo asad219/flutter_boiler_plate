@@ -1,12 +1,9 @@
-import 'dart:developer' as developer;
-
 import 'package:app_boilerplate/core/config/env_config.dart';
+import 'package:app_boilerplate/core/utils/app_logger.dart';
 import 'package:firebase_core/firebase_core.dart';
 
-/// Guards Firebase initialization so the app still boots when Firebase is
-/// disabled (`ENABLE_FIREBASE=false`) or native config files are missing.
-///
-/// Every Firebase-backed service must check [isInitialized] first.
+/// Starts Firebase if it's enabled and set up. Firebase services check
+/// [isInitialized] first, so the app also works without Firebase.
 class FirebaseBootstrap {
   FirebaseBootstrap._();
 
@@ -14,12 +11,12 @@ class FirebaseBootstrap {
 
   static bool get isInitialized => _initialized;
 
-  /// Safe to call multiple times and from background isolates.
+  /// Safe to call more than once, also from background handlers.
   static Future<bool> initialize() async {
     if (_initialized) return true;
 
     if (!EnvConfig.enableFirebase) {
-      developer.log(
+      AppLogger.debug(
         'Firebase disabled via ENABLE_FIREBASE=false',
         name: 'FirebaseBootstrap',
       );
@@ -27,17 +24,16 @@ class FirebaseBootstrap {
     }
 
     try {
-      // Reads google-services.json (Android) / GoogleService-Info.plist (iOS).
-      // To use FlutterFire CLI instead, pass
-      // `options: DefaultFirebaseOptions.currentPlatform` here.
+      // Reads google-services.json / GoogleService-Info.plist. With the
+      // FlutterFire CLI, pass `options: DefaultFirebaseOptions.currentPlatform`.
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp();
       }
       _initialized = true;
     } catch (e, stackTrace) {
-      developer.log(
-        'Firebase not configured — continuing without Firebase services. '
-        'See README › Firebase setup.',
+      AppLogger.warning(
+        'Firebase is not set up, so it is skipped. '
+        'See "Firebase setup" in README.md.',
         name: 'FirebaseBootstrap',
         error: e,
         stackTrace: stackTrace,

@@ -1,8 +1,7 @@
-import 'package:app_boilerplate/core/constants/app_colors.dart';
+import 'package:app_boilerplate/core/widgets/feedback/app_snack_bar.dart';
 import 'package:flutter/material.dart';
 
-/// Context-free navigation and snackbars (used by BLoC listeners,
-/// notification handlers and session expiry).
+/// Navigation and snackbars without a BuildContext.
 class NavigationService {
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
   final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
@@ -12,7 +11,7 @@ class NavigationService {
 
   String? _currentRouteName;
 
-  /// Name of the top-most named route (null for dialogs / unnamed routes).
+  /// Name of the top route (null for dialogs and unnamed routes).
   String? get currentRouteName => _currentRouteName;
 
   BuildContext? get currentContext => navigatorKey.currentContext;
@@ -37,7 +36,7 @@ class NavigationService {
     );
   }
 
-  /// Clears the stack and shows [routeName]. No-op if already on it.
+  /// Clears the stack and opens [routeName]. Does nothing if already there.
   void pushNamedAndClearStack(String routeName, {Object? arguments}) {
     if (_currentRouteName == routeName) return;
     navigatorKey.currentState?.pushNamedAndRemoveUntil(
@@ -51,18 +50,15 @@ class NavigationService {
     navigatorKey.currentState?.pop<T>(result);
   }
 
-  void showSnackBar(String message, {bool isError = false}) {
+  void showSnackBar(
+    String message, {
+    AppSnackBarType type = AppSnackBarType.info,
+  }) {
     final messenger = scaffoldMessengerKey.currentState;
     if (messenger == null) return;
     messenger
       ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: isError ? AppColors.error : null,
-        ),
-      );
+      ..showSnackBar(AppSnackBar.build(message, type: type));
   }
 }
 

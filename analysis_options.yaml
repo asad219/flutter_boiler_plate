@@ -5,11 +5,13 @@ analyzer:
     - build/**
     - "**/*.g.dart"
     - "**/*.freezed.dart"
+    - lib/l10n/generated/**
 
 linter:
   rules:
     always_use_package_imports: true
     avoid_print: true
+    directives_ordering: true
     prefer_const_constructors: true
     prefer_const_declarations: true
     prefer_final_fields: true

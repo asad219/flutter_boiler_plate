@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:app_boilerplate/core/constants/app_keys.dart';
@@ -8,19 +7,18 @@ import 'package:app_boilerplate/core/services/notification/fcm_token_registrar.d
 import 'package:app_boilerplate/core/services/notification/local_notification_service.dart';
 import 'package:app_boilerplate/core/services/notification/notification_payload_handler.dart';
 import 'package:app_boilerplate/core/services/storage/shared_preferences_service.dart';
+import 'package:app_boilerplate/core/utils/app_logger.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-/// Background / terminated-state FCM handler. Runs in its own isolate, so it
-/// cannot use the service locator.
-///
-/// Messages with a `notification` block are displayed by the OS; data-only
-/// messages carrying `title`/`body` are surfaced as local notifications.
+/// Handles push messages in the background. Runs in a separate isolate, so
+/// it can't use getIt. Data-only messages with `title` and `body` are shown
+/// as local notifications.
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final ready = await FirebaseBootstrap.initialize();
   if (!ready) return;
 
-  developer.log(
+  AppLogger.debug(
     'Background message: ${message.messageId}',
     name: 'PushNotificationService',
   );
@@ -33,8 +31,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
 }
 
-/// FCM lifecycle: permissions, token registration/refresh, and
-/// foreground / background-tap / terminated-tap message handling.
+/// Push notifications: permission, token, incoming messages and taps.
 class PushNotificationService {
   PushNotificationService({
     required this._localNotifications,
@@ -53,7 +50,7 @@ class PushNotificationService {
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   bool _initialized = false;
 
-  // Resolved lazily: FirebaseMessaging.instance throws if Firebase isn't up.
+  // Created on first use, because it throws if Firebase isn't started.
   FirebaseMessaging get _messaging =>
       _messagingOverride ?? FirebaseMessaging.instance;
 
@@ -61,7 +58,7 @@ class PushNotificationService {
 
   String? get cachedToken => _prefs.getString(AppKeys.fcmTokenKey);
 
-  /// Call once from `main()` after Firebase + DI are ready.
+  /// Call once at startup, after Firebase and getIt are ready.
   Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
@@ -71,14 +68,14 @@ class PushNotificationService {
     );
 
     if (!isAvailable) {
-      developer.log(
+      AppLogger.debug(
         'Firebase unavailable — push notifications disabled',
         name: 'PushNotificationService',
       );
       return;
     }
 
-    // iOS: let the OS present notification messages while in foreground.
+    // iOS: show notifications while the app is open.
     await _messaging.setForegroundNotificationPresentationOptions(
       alert: true,
       badge: true,
@@ -90,12 +87,12 @@ class PushNotificationService {
       ..add(FirebaseMessaging.onMessageOpenedApp.listen(_onMessageOpenedApp))
       ..add(_messaging.onTokenRefresh.listen(_onTokenRefresh));
 
-    // App launched from terminated state by tapping a push notification.
+    // The app was opened by tapping a notification.
     final initialMessage = await _messaging.getInitialMessage();
     if (initialMessage != null) _onMessageOpenedApp(initialMessage);
   }
 
-  /// Shows the OS permission prompt (iOS, Android 13+). Returns true if granted.
+  /// Asks for notification permission. Returns true if allowed.
   Future<bool> requestPermission() async {
     try {
       if (!isAvailable) return _localNotifications.requestPermission();
@@ -109,7 +106,7 @@ class PushNotificationService {
       return status == AuthorizationStatus.authorized ||
           status == AuthorizationStatus.provisional;
     } catch (e, stackTrace) {
-      developer.log(
+      AppLogger.warning(
         'Notification permission request failed',
         name: 'PushNotificationService',
         error: e,
@@ -123,7 +120,7 @@ class PushNotificationService {
     if (!isAvailable) return null;
     try {
       if (Platform.isIOS && await _waitForApnsToken() == null) {
-        developer.log(
+        AppLogger.warning(
           'APNs token unavailable (simulator or push capability missing)',
           name: 'PushNotificationService',
         );
@@ -133,7 +130,7 @@ class PushNotificationService {
       if (token != null) await _prefs.setString(AppKeys.fcmTokenKey, token);
       return token;
     } catch (e, stackTrace) {
-      developer.log(
+      AppLogger.warning(
         'Failed to get FCM token',
         name: 'PushNotificationService',
         error: e,
@@ -156,7 +153,7 @@ class PushNotificationService {
     try {
       await _messaging.deleteToken();
     } catch (e) {
-      developer.log(
+      AppLogger.warning(
         'Failed to delete FCM token',
         name: 'PushNotificationService',
         error: e,
@@ -181,7 +178,7 @@ class PushNotificationService {
   }
 
   void _onForegroundMessage(RemoteMessage message) {
-    developer.log(
+    AppLogger.debug(
       'Foreground message: ${message.messageId}',
       name: 'PushNotificationService',
     );
@@ -192,8 +189,8 @@ class PushNotificationService {
       return;
     }
 
-    // Android doesn't display FCM notifications in the foreground; iOS does
-    // (see setForegroundNotificationPresentationOptions).
+    // Android doesn't show push notifications while the app is open, so show
+    // a local one. iOS shows them by itself.
     if (Platform.isAndroid) {
       unawaited(
         _localNotifications.show(
@@ -215,7 +212,7 @@ class PushNotificationService {
     await _tokenRegistrar.register(token);
   }
 
-  /// APNs token can lag behind app start on iOS; FCM getToken fails without it.
+  /// On iOS the APNs token can arrive late, and getToken fails without it.
   Future<String?> _waitForApnsToken() async {
     for (var attempt = 0; attempt < 5; attempt++) {
       final apnsToken = await _messaging.getAPNSToken();

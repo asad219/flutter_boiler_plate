@@ -1,3 +1,4 @@
+import 'package:app_boilerplate/app/routes/not_found_page.dart';
 import 'package:app_boilerplate/app/routes/routes_name.dart';
 import 'package:app_boilerplate/features/auth/presentation/pages/login_page.dart';
 import 'package:app_boilerplate/features/auth/presentation/pages/splash_page.dart';
@@ -16,7 +17,7 @@ class AppRouter {
   static bool isKnownRoute(String routeName) => _routes.containsKey(routeName);
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
-    final builder = _routes[settings.name] ?? (_) => const LoginPage();
+    final builder = _routes[settings.name] ?? (_) => const NotFoundPage();
     return MaterialPageRoute<void>(builder: builder, settings: settings);
   }
 }

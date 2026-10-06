@@ -1,16 +1,13 @@
 import 'dart:convert';
-import 'dart:developer' as developer;
 
 import 'package:app_boilerplate/app/routes/app_router.dart';
 import 'package:app_boilerplate/core/services/navigation/navigation_service.dart';
+import 'package:app_boilerplate/core/utils/app_logger.dart';
 
-/// Turns notification payloads into navigation.
+/// Opens a screen when a notification is tapped.
 ///
-/// Payload contract (FCM `data` or local notification payload):
-/// `{"route": "/home", ...extra}` — extra keys are passed as route arguments.
-///
-/// Taps that arrive before the user is authenticated (cold start, login
-/// screen) are held until [markReady] so deep links never bypass auth.
+/// Payload: `{"route": "/home", ...}`. Other keys are passed as route
+/// arguments. Taps before login wait until [markReady] is called.
 class NotificationPayloadHandler {
   NotificationPayloadHandler(this._navigationService);
 
@@ -36,7 +33,7 @@ class NotificationPayloadHandler {
       final decoded = jsonDecode(payload);
       if (decoded is Map<String, dynamic>) handle(decoded);
     } catch (e) {
-      developer.log(
+      AppLogger.warning(
         'Ignoring non-JSON notification payload',
         name: 'NotificationPayloadHandler',
         error: e,
@@ -44,7 +41,7 @@ class NotificationPayloadHandler {
     }
   }
 
-  /// Call once the authenticated shell is visible.
+  /// Call after the user is logged in.
   void markReady() {
     _ready = true;
     final pending = _pending;

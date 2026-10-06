@@ -1,4 +1,7 @@
+import 'package:app_boilerplate/core/constants/app_dimens.dart';
+import 'package:app_boilerplate/core/extensions/context_extensions.dart';
 import 'package:app_boilerplate/core/utils/validators.dart';
+import 'package:app_boilerplate/core/widgets/widgets.dart';
 import 'package:app_boilerplate/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -14,7 +17,6 @@ class _LoginFormState extends State<LoginForm> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -38,60 +40,40 @@ class _LoginFormState extends State<LoginForm> {
   @override
   Widget build(BuildContext context) {
     final isLoading = context.select<AuthBloc, bool>(
-      (bloc) => bloc.state is AuthLoading,
+      (bloc) => bloc.state.status == AuthStatus.loading,
     );
+    final l10n = context.l10n;
 
     return Form(
       key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextFormField(
-            controller: _emailController,
-            enabled: !isLoading,
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.next,
-            autofillHints: const [AutofillHints.email],
-            decoration: const InputDecoration(
-              labelText: 'Email',
-              prefixIcon: Icon(Icons.email_outlined),
+      child: AutofillGroup(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppTextField(
+              controller: _emailController,
+              label: l10n.emailLabel,
+              prefixIcon: Icons.email_outlined,
+              enabled: !isLoading,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              autofillHints: const [AutofillHints.email],
+              validator: (value) => Validators.email(value, l10n),
             ),
-            validator: Validators.email,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _passwordController,
-            enabled: !isLoading,
-            obscureText: _obscurePassword,
-            textInputAction: TextInputAction.done,
-            autofillHints: const [AutofillHints.password],
-            onFieldSubmitted: (_) => _submit(),
-            decoration: InputDecoration(
-              labelText: 'Password',
-              prefixIcon: const Icon(Icons.lock_outline),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscurePassword
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                ),
-                onPressed: () =>
-                    setState(() => _obscurePassword = !_obscurePassword),
-              ),
+            const SizedBox(height: AppSpacing.lg),
+            AppPasswordField(
+              controller: _passwordController,
+              enabled: !isLoading,
+              onSubmitted: (_) => _submit(),
             ),
-            validator: Validators.password,
-          ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: isLoading ? null : _submit,
-            child: isLoading
-                ? const SizedBox.square(
-                    dimension: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2.5),
-                  )
-                : const Text('Sign in'),
-          ),
-        ],
+            const SizedBox(height: AppSpacing.xl),
+            AppButton(
+              label: l10n.signIn,
+              isLoading: isLoading,
+              onPressed: _submit,
+            ),
+          ],
+        ),
       ),
     );
   }

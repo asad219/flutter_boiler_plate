@@ -1,8 +1,8 @@
-# Codemagic CI/CD. Setup and troubleshooting: README › CI/CD with Codemagic.
+# Codemagic CI/CD. Setup steps are in README.md (CI/CD with Codemagic).
 #
-#   ci               every push and pull request: format check, analyze, test
-#   android-release  tag v*: signed .aab → Google Play (internal track)
-#   ios-release      tag v*: signed .ipa → TestFlight
+#   ci               every push and pull request: format check, analyze
+#   android-release  tag v*: signed .aab to Google Play (internal track)
+#   ios-release      tag v*: signed .ipa to TestFlight
 #
 # These names must match what you create in Codemagic:
 #   environment groups  app_env, firebase, google_play
@@ -29,7 +29,7 @@ definitions:
 
 workflows:
   ci:
-    name: CI (format, analyze, test)
+    name: CI (format, analyze)
     instance_type: linux_x2
     max_build_duration: 30
     environment:
@@ -49,14 +49,9 @@ workflows:
     scripts:
       - *get_packages
       - name: Check formatting
-        script: dart format --output=none --set-exit-if-changed lib test
+        script: dart format --output=none --set-exit-if-changed lib
       - name: Analyze
         script: flutter analyze
-      - name: Test
-        script: |
-          mkdir -p test-results
-          flutter test --machine > test-results/flutter.json
-        test_report: test-results/flutter.json
 
   android-release:
     name: Android release

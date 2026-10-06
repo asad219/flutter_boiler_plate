@@ -2,8 +2,7 @@ import 'package:app_boilerplate/core/network/api_response_parser.dart';
 import 'package:app_boilerplate/features/auth/data/models/user_model.dart';
 import 'package:equatable/equatable.dart';
 
-/// `POST /users/login` → `{message, token, refreshToken?, user}`,
-/// optionally wrapped in `{data: {...}}`.
+/// Response of `POST /users/login`. It can also be wrapped in `data`.
 class LoginResponseModel extends Equatable {
   const LoginResponseModel({
     this.message,

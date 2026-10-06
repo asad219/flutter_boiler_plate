@@ -10,8 +10,13 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
 
   cupertino_icons: ^1.0.8
+
+  # Localization (version pinned by flutter_localizations)
+  intl: any
 
   # State Management
   bloc: ^9.2.1
@@ -35,14 +40,58 @@ dependencies:
 
   # Local Notifications
   flutter_local_notifications: ^22.3.1
+  firebase_crashlytics: ^5.4.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
   flutter_lints: ^6.0.0
-  bloc_test: ^10.0.0
-  mocktail: ^1.0.5
+  flutter_launcher_icons: ^0.14.4
+
+# App icon generation: ./tool/generate_app_icons.sh (see "App icon" in README).
+flutter_launcher_icons:
+  # 1024×1024 PNG, square, no rounded corners (each platform applies its own mask).
+  image_path: "assets/icon/app_icon.png"
+  # Overwrites mipmap-*/ic_launcher.png (used by AndroidManifest.xml and local
+  # notifications).
+  android: true
+  min_sdk_android: 24
+  # App Store rejects icons with transparency, so it is flattened onto a color.
+  ios: true
+  remove_alpha_ios: true
+  background_color_ios: "#FFFFFF"
+  # Android 8+ adaptive icon (recommended). Foreground: 1024×1024 transparent PNG
+  # with the logo inside the central ~66%.
+  # adaptive_icon_background: "#FFFFFF"
+  # adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+  # Android 13+ themed icon: single-color logo on transparent.
+  # adaptive_icon_monochrome: "assets/icon/app_icon_monochrome.png"
 
 flutter:
   uses-material-design: true
+  generate: true
+
+  # Every file in a listed folder is bundled (subfolders need their own entry).
+  # assets/icon/ is only the launcher icon source and is not bundled.
+  assets:
+    - assets/images/
+
+  # Family names must match AppFonts in app_typography.dart (see README).
+  fonts:
+    - family: ProximaNova
+      fonts:
+        - asset: fonts/proximanova_regular.ttf
+          weight: 400
+        - asset: fonts/proximanova_bold.otf
+          weight: 700
+    - family: DubaiFont
+      fonts:
+        - asset: fonts/Dubai-Light.ttf
+          weight: 300
+        - asset: fonts/Dubai-Regular.ttf
+          weight: 400
+        - asset: fonts/Dubai-Medium.ttf
+          weight: 500
+        - asset: fonts/Dubai-Bold.ttf
+          weight: 700
