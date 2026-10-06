@@ -1,0 +1,4 @@
+{
+  "git.autoRepositoryDetection": "subFolders",
+  "git.repositoryScanIgnoredFolders": ["build", "node_modules", ".dart_tool", "ios/.symlinks"]
+}
