@@ -1,0 +1,6 @@
+{
+  "ENV": "prod",
+  "BASE_URL": "https://api.example.com/api/",
+  "API_VERSION": "v1",
+  "ENABLE_FIREBASE": true
+}
